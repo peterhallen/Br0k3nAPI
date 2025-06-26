@@ -1,4 +1,12 @@
 basePath: /
+definitions:
+  main.User:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    type: object
 host: localhost:8888
 info:
   contact: {}
@@ -7,6 +15,118 @@ info:
   title: Br0K3nAPI
   version: "1.0"
 paths:
+  /admin/secret:
+    get:
+      description: Returns admin-only info, but only checks for username == 'admin'
+        in JWT (broken access control)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Admin secret
+      tags:
+      - admin
+  /data:
+    post:
+      consumes:
+      - application/json
+      description: Echoes user input, vulnerable to XSS and SQLi (no validation)
+      parameters:
+      - description: Data to submit
+        in: body
+        name: data
+        required: true
+        schema:
+          additionalProperties:
+            type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Submit data
+      tags:
+      - data
+  /error:
+    get:
+      description: Returns a stack trace or internal error (Verbose Error Message)
+      produces:
+      - application/json
+      responses: {}
+      summary: Verbose error
+      tags:
+      - vuln
+  /leak/env:
+    get:
+      description: Returns all environment variables (Sensitive Data Exposure)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Leak environment variables
+      tags:
+      - vuln
+  /login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates a user and returns a JWT (with weak secret)
+      parameters:
+      - description: User credentials
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/main.User'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Login
+      tags:
+      - auth
   /ping:
     get:
       description: Returns pong
@@ -20,4 +140,141 @@ paths:
       summary: Health check
       tags:
       - health
+  /profile/{userID}:
+    get:
+      description: Returns the profile for any user by userID (username). Demonstrates
+        IDOR vulnerability.
+      parameters:
+      - description: User ID (username)
+        in: path
+        name: userID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.User'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get user profile
+      tags:
+      - user
+  /readfile:
+    get:
+      description: Reads a file from disk based on user input (no sanitization)
+      parameters:
+      - description: Path to file
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: file contents
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Path traversal
+      tags:
+      - vuln
+  /redirect:
+    get:
+      description: Redirects to a user-supplied URL (Open Redirect)
+      parameters:
+      - description: URL to redirect to
+        in: query
+        name: url
+        required: true
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "302":
+          description: redirect
+          schema:
+            type: string
+      summary: Unvalidated redirect
+      tags:
+      - vuln
+  /register:
+    post:
+      consumes:
+      - application/json
+      description: Registers a user with a weak password policy and verbose errors
+      parameters:
+      - description: User credentials
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/main.User'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Register a new user
+      tags:
+      - auth
+  /upload:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Uploads a file without validation (no type/size check)
+      parameters:
+      - description: File to upload
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Insecure file upload
+      tags:
+      - vuln
 swagger: "2.0"
