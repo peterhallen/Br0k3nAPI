@@ -1,0 +1,23 @@
+basePath: /
+host: localhost:8080
+info:
+  contact: {}
+  description: Intentionally vulnerable API for pen testing tools (ZAP, BurpSuite,
+    etc.)
+  title: Br0K3nAPI
+  version: "1.0"
+paths:
+  /ping:
+    get:
+      description: Returns pong
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Health check
+      tags:
+      - health
+swagger: "2.0"
