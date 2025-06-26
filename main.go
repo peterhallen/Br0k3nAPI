@@ -8,7 +8,9 @@
 package main
 
 import (
+	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -228,6 +230,100 @@ func main() {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"secret": "The admin flag is: FLAG-ADMIN-1337"})
+	})
+
+	// Leak environment variables
+	// @Summary Leak environment variables
+	// @Description Returns all environment variables (Sensitive Data Exposure)
+	// @Tags vuln
+	// @Produce json
+	// @Success 200 {object} map[string]string
+	// @Router /leak/env [get]
+	r.GET("/leak/env", func(c *gin.Context) {
+		envs := os.Environ()
+		result := map[string]string{}
+		for _, e := range envs {
+			parts := strings.SplitN(e, "=", 2)
+			if len(parts) == 2 {
+				result[parts[0]] = parts[1]
+			}
+		}
+		c.JSON(http.StatusOK, result)
+	})
+
+	// Unvalidated redirect
+	// @Summary Unvalidated redirect
+	// @Description Redirects to a user-supplied URL (Open Redirect)
+	// @Tags vuln
+	// @Produce plain
+	// @Param url query string true "URL to redirect to"
+	// @Success 302 {string} string "redirect"
+	// @Router /redirect [get]
+	r.GET("/redirect", func(c *gin.Context) {
+		url := c.Query("url")
+		c.Redirect(http.StatusFound, url)
+	})
+
+	// Insecure file upload
+	// @Summary Insecure file upload
+	// @Description Uploads a file without validation (no type/size check)
+	// @Tags vuln
+	// @Accept multipart/form-data
+	// @Produce json
+	// @Param file formData file true "File to upload"
+	// @Success 200 {object} map[string]string
+	// @Failure 400 {object} map[string]string
+	// @Router /upload [post]
+	r.POST("/upload", func(c *gin.Context) {
+		file, header, err := c.Request.FormFile("file")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "No file uploaded: " + err.Error()})
+			return
+		}
+		defer file.Close()
+		bytes, err := ioutil.ReadAll(file)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Could not read file: " + err.Error()})
+			return
+		}
+		// Save file to /tmp (no validation)
+		filename := "/tmp/" + header.Filename
+		ioutil.WriteFile(filename, bytes, 0644)
+		c.JSON(http.StatusOK, gin.H{"message": "File uploaded", "filename": filename, "size": len(bytes)})
+	})
+
+	// Verbose error message
+	// @Summary Verbose error
+	// @Description Returns a stack trace or internal error (Verbose Error Message)
+	// @Tags vuln
+	// @Produce json
+	// @Router /error [get]
+	r.GET("/error", func(c *gin.Context) {
+		defer func() {
+			if r := recover(); r != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "panic: ", "stack": r})
+			}
+		}()
+		panic("This is a test panic for verbose error message!")
+	})
+
+	// Path traversal
+	// @Summary Path traversal
+	// @Description Reads a file from disk based on user input (no sanitization)
+	// @Tags vuln
+	// @Produce plain
+	// @Param path query string true "Path to file"
+	// @Success 200 {string} string "file contents"
+	// @Failure 400 {object} map[string]string
+	// @Router /readfile [get]
+	r.GET("/readfile", func(c *gin.Context) {
+		path := c.Query("path")
+		data, err := ioutil.ReadFile(path)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.String(http.StatusOK, string(data))
 	})
 
 	// TODO: Add more endpoints
