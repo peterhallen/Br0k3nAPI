@@ -9,6 +9,7 @@ package main
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	_ "Br0K3nAPI/docs"
@@ -39,6 +40,22 @@ type User struct {
 // @Router /ping [get]
 func main() {
 	r := gin.Default()
+
+	// CORS misconfiguration: allow all origins
+	r.Use(func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		c.Next()
+	})
+
+	// Insecure HTTP headers
+	r.Use(func(c *gin.Context) {
+		c.Writer.Header().Set("X-Frame-Options", "ALLOWALL")
+		c.Writer.Header().Set("X-Content-Type-Options", "nosniff") // Actually a good header, but left for demo
+		c.Writer.Header().Set("Server", "Br0K3nAPI")
+		c.Next()
+	})
 
 	// Health check endpoint
 	r.GET("/ping", func(c *gin.Context) {
@@ -140,6 +157,77 @@ func main() {
 			return
 		}
 		c.JSON(http.StatusOK, user)
+	})
+
+	// Data submission endpoint (XSS, SQLi, no validation)
+	// @Summary Submit data
+	// @Description Echoes user input, vulnerable to XSS and SQLi (no validation)
+	// @Tags data
+	// @Accept json
+	// @Produce json
+	// @Param data body map[string]string true "Data to submit"
+	// @Success 200 {object} map[string]string
+	// @Failure 400 {object} map[string]string
+	// @Security ApiKeyAuth
+	r.POST("/data", func(c *gin.Context) {
+		tokenString := c.GetHeader("Authorization")
+		if tokenString == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing Authorization header"})
+			return
+		}
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			return jwtSecret, nil
+		})
+		if err != nil || !token.Valid {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			return
+		}
+		var req map[string]string
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: " + err.Error()})
+			return
+		}
+		// Simulate SQLi by echoing input in a fake SQL query
+		if val, ok := req["input"]; ok {
+			fakeQuery := "SELECT * FROM data WHERE input = '" + val + "'"
+			c.JSON(http.StatusOK, gin.H{"echo": val, "query": fakeQuery})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"echo": req})
+	})
+
+	// Admin-only endpoint (broken access control)
+	// @Summary Admin secret
+	// @Description Returns admin-only info, but only checks for username == 'admin' in JWT (broken access control)
+	// @Tags admin
+	// @Produce json
+	// @Success 200 {object} map[string]string
+	// @Failure 401 {object} map[string]string
+	// @Security ApiKeyAuth
+	r.GET("/admin/secret", func(c *gin.Context) {
+		tokenString := c.GetHeader("Authorization")
+		if tokenString == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing Authorization header"})
+			return
+		}
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			return jwtSecret, nil
+		})
+		if err != nil || !token.Valid {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			return
+		}
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+			return
+		}
+		username, _ := claims["username"].(string)
+		if strings.ToLower(username) != "admin" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "You are not admin"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"secret": "The admin flag is: FLAG-ADMIN-1337"})
 	})
 
 	// TODO: Add more endpoints
