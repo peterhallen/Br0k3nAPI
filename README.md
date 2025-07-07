@@ -96,6 +96,10 @@ chmod +x test_br0k3napi.sh
 ./test_br0k3napi.sh
 ```
 
+## Contributing
+
+Contributions are welcome! Please read the [CONTRIBUTING.md](CONTRIBUTING.md) file for guidelines on how to submit changes and run tests.
+
 ## Disclaimer
 
-This project is for educational and testing purposes only. Do not use in production or expose to the public internet. 
+This project is for educational and testing purposes only. Do not use in production or expose to the public internet.
